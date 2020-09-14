@@ -31,13 +31,14 @@ class Message():
                 if len(event[i]) == 1:
                     event[i] = event[i][0]
                 for j in event[i]:
-                    if isinstance(j, dict):
-                        for k in j:
-                            self.__dict__[k] = j[k]
-                        new_class = type(i, (), {
-                            "__init__": lambda self: for l in j: self.__dict__[l] = j[l]
-                        })
-                    elif isinstance(event[i][j], dict):
+                    #To test, dynamic class creation
+                    #if isinstance(j, dict):
+                    #    for k in j:
+                    #        self.__dict__[k] = j[k]
+                    #    new_class = type(i, (), {
+                    #        "__init__": lambda self: for l in j: self.__dict__[l] = j[l]
+                    #    })
+                    if isinstance(event[i][j], dict):
                         for k in event[i][j]:
                             self.__dict__[i][j][k] = event[i][j][k]
                     else:
