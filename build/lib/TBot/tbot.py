@@ -11,7 +11,10 @@ class Message():
     """Message class"""
 
     def __init__(self, event):
-        #self.ok = event["ok"]
+        if "ok" in event:
+            self.ok = event["ok"]
+        else:
+            self.ok = True
         if "update_id" in event:
             self.update_id = event["update_id"]
             event = event["message"]
@@ -28,14 +31,19 @@ class Message():
                 if len(event[i]) == 1:
                     event[i] = event[i][0]
                 for j in event[i]:
-                    if isinstance(event[i][j], dict):
+                    if isinstance(j, dict):
+                        for k in j:
+                            self.__dict__[k] = j[k]
+                        new_class = type(i, (), {
+                            "__init__": lambda self: for l in j: self.__dict__[l] = j[l]
+                        })
+                    elif isinstance(event[i][j], dict):
                         for k in event[i][j]:
                             self.__dict__[i][j][k] = event[i][j][k]
                     else:
                         self.__dict__[j] = event[i][j]  # [i][j] ?
             else:
                 self.__dict__[i] = event[i]
-        pass
 
     class From():
         """from dictionary value"""
@@ -148,7 +156,7 @@ class TBot():
     def send_image_from_url(self, event, url):
         """Send an image to an user"""
         return self.__get("sendPhoto",
-                          {"chat_id": event.chat_id, "photo": url})["ok"]
+                          {"chat_id": event.chat_id, "photo": url}).ok
 
     def send(self, event, message, *args):
         """Send a message"""
