@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="Alby7503TBot",
-    version="1.0.8",
+    version="1.0.9",
     author="Alberto Vona",
     author_email="alberto.vona24@gmail.com",
     description="Lightweight telegram bot library.",
