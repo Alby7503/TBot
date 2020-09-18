@@ -1,7 +1,7 @@
 """Telegram Bot"""
-#pylint: disable=no-member
+# pylint: disable=no-member invalid-name
 from socket import socket, gethostbyname
-from ssl import SSLContext, SSLZeroReturnError
+from ssl import SSLContext, SSLZeroReturnError, SSLError
 from json import loads, dumps
 from time import sleep
 from threading import Thread
@@ -23,7 +23,7 @@ class Message():
             self.user = self.From(event["from"])
             del event["from"]
         if "chat" in event:
-            self.chat = self.From(event["chat"])
+            self.chat = self.Chat(event["chat"])
             del event["chat"]
 
         for i in event:
@@ -31,8 +31,8 @@ class Message():
                 if len(event[i]) == 1:
                     event[i] = event[i][0]
                 for j in event[i]:
-                    #To test, dynamic class creation
-                    #if isinstance(j, dict):
+                    # To test, dynamic class creation
+                    # if isinstance(j, dict):
                     #    for k in j:
                     #        self.__dict__[k] = j[k]
                     #    new_class = type(i, (), {
@@ -64,20 +64,26 @@ class Message():
 class TBot():
     """Main Class"""
 
-    def __init__(self, TOKEN):
+    def __init__(self, TOKEN: str):
         self.__url = gethostbyname("api.telegram.org")
         self.__token = TOKEN
         self.__commands = {}
         self.__offset = 0
         self.update_frequence = 1  # seconds
         self.username: str
-        self.__connect()
+        self.__process_func = [] #only 1? : function
+        self.__sock = None
+        self.__sock = self.__connect(self.__sock) #mhhhhhhh
         self.__solve_me()
 
-    def __connect(self):
-        self.__sock = socket(2, 1)
-        self.__sock.connect((self.__url, 443))
-        self.__sock = SSLContext().wrap_socket(self.__sock)
+    def __connect(self, sock):
+        if hasattr(sock, "closed"):
+            if not sock.closed:
+                sock.close()
+        sock = socket(2, 1)
+        sock.connect((self.__url, 443))
+        sock = SSLContext().wrap_socket(sock)
+        return sock
 
     def __solve_me(self):
         if (response:= self.__get("getMe")):
@@ -111,6 +117,8 @@ class TBot():
         except IndexError:
             # return False
             pass
+        except SSLError:
+            self.__sock = self.__connect(self.__sock)
 
     def _update(self):
         if (response:= self.__get("getUpdates", {"offset": self.__offset})):
@@ -123,7 +131,6 @@ class TBot():
         if not response:
             return
         for i in response:
-            # if "entities" in i["message"]:
             if hasattr(i, "type"):
                 if i.type == "bot_command":
                     match = False
@@ -132,11 +139,13 @@ class TBot():
                             self.username, '')
                     for j in self.__commands:
                         if j == i.text:
-                            self.__commands[j](i)
+                            Thread(target=self.__commands[j](i)).start()
                             match = True
                             break
                     if not match and '*' in self.__commands:
                         self.__commands['*'](i)
+            for k in self.__process_func:
+                Thread(target=k, args=[i, ]).start()
 
     def command(self, *args):
         """Add a command handler"""
@@ -145,13 +154,21 @@ class TBot():
             return func
         return wrapper
 
+    def process(self, func):
+        """
+        Add a process handler.
+
+        Functions added here will be called every time there is an update.
+        """
+        self.__process_func.append(func)
+
     def run(self):
         """Start the bot"""
         while 1:
             try:
                 self._check()
-            except (ConnectionAbortedError, SSLZeroReturnError):
-                self.__connect()
+            except (ConnectionAbortedError, SSLZeroReturnError):#, SSLError):
+                self.__sock = self.__connect(self.__sock)
             sleep(self.update_frequence)
 
     def send_image_from_url(self, event, url):
@@ -164,10 +181,17 @@ class TBot():
         message = {
             "chat_id": event.chat.id,
             "text": message.replace("\n", "%0A")
-        }
+        }  # Use Message()
         for i in args:
             message[i[0]] = i[1]
-        # print(message)
+        return self.__get("sendMessage", message)
+
+    def send_id(self, chat_id, message):
+        """Send a message to an id"""
+        message = {
+            "chat_id": chat_id,
+            "text": message.replace("\n", "%0A")
+        }  # Use Message()
         return self.__get("sendMessage", message)
 
     def get_chat(self, event):
@@ -181,12 +205,18 @@ class Scheduler():
     def __init__(self):
         self.__funcs = []
 
-    def schedule(self, func, time, repeat=True, call=False):
+    def schedule(self, func, time, repeat=True, call=False, asynchronous=True):  # args=None
         """Schedule a new function call"""
         self.__funcs.append(func)
         if call:
-            func()
-        Thread(target=self.__scheduled, args=[func, time, repeat]).start()
+            if asynchronous:
+                Thread(target=func).start()
+            else:
+                func()
+        if asynchronous:
+            Thread(target=self.__scheduled, args=[func, time, repeat]).start()
+        else:
+            self.__scheduled(func, time, repeat)
 
     def remove(self, func):
         """Remove a scheduled function call"""
